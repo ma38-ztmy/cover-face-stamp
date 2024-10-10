@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Detection Example</title>
+    <style>
+        #imageContainer {
+            position: relative;
+            display: inline-block;
+        }
+        canvas {
+            position: absolute;
+            left: 0;
+            top: 0;
+            pointer-events: none;
+        }
+        img {
+            max-width: 100%;
+            display: block;
+        }
+        #status {
+            margin-top: 20px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+        }
+        #detectedFaces {
+            display: flex;
+            flex-direction: column;
+            margin-top: 20px;
+        }
+        .faceItem {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .faceImage {
+            border: 1px solid #ccc;
+            width: 32px;
+            height: 32px;
+            margin-right: 10px;
+        }
+        /* .emojiSelect, .emojiSizeInput, .offsetXInput, .offsetYInput {
+            margin-right: 10px;
+        } */
+        #resultImage {
+            margin-top: 20px;
+            border: 1px solid #ccc;
+            display: block;
+            max-width: 100%;
+            height: auto;
+        }
+        input[type="file"] {
+            margin-bottom: 10px;
+        }
+        .offsetButton {
+            margin-left: 5px;
+            padding: 2px 6px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>Face Detection in Browser</h1>
+    <input type="file" id="imageUpload" accept="image/*">
+    <br>
+    <div id="imageContainer">
+        <canvas id="overlay"></canvas>
+    </div>
+    <div id="status">画像を選択してください。</div>
+    <div id="detectedFaces"></div>
+    <img id="resultImage" style="display:none;">
+
+    <script src="./face-api.js"></script>
+
+    <script>
+        let detections = [];
+        let originalImageWidth = 0;
+        let originalImageHeight = 0;
+        let originalImage = null;  // 読み込んだ画像を保持するための変数
+
+        async function start() {
+            await faceapi.nets.ssdMobilenetv1.loadFromUri('./weights');
+            await faceapi.nets.faceLandmark68Net.loadFromUri('./weights');
+            await faceapi.nets.faceRecognitionNet.loadFromUri('./weights');
+            await faceapi.nets.tinyFaceDetector.loadFromUri('./weights');
+
+            const imageUpload = document.getElementById('imageUpload');
+            const overlay = document.getElementById('overlay');
+            const status = document.getElementById('status');
+            const detectedFacesContainer = document.getElementById('detectedFaces');
+            const resultImage = document.getElementById('resultImage');
+
+            imageUpload.addEventListener('change', async () => {
+                const file = imageUpload.files[0];
+                const reader = new FileReader();
+
+                status.textContent = '画像を読み込み中...';
+
+                reader.onload = async function (event) {
+                    const image = new Image();
+                    resultImage.src = image.src = event.target.result;
+
+                    originalImage = image;  // 画像を保持
+                    image.onload = async function () {
+                        originalImageWidth = image.width;
+                        originalImageHeight = image.height;
+
+                        status.textContent = '顔認識中...';
+
+                        detections = await faceapi.detectAllFaces(image, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks();
+
+                        const displaySize = { width: originalImageWidth, height: originalImageHeight };
+                        faceapi.matchDimensions(overlay, displaySize);
+                        const resizedDetections = faceapi.resizeResults(detections, displaySize);
+
+                        overlay.width = originalImageWidth;
+                        overlay.height = originalImageHeight;
+                        overlay.getContext('2d').clearRect(0, 0, overlay.width, overlay.height);
+
+                        if (detections.length > 0) {
+                            status.textContent = `顔が ${detections.length} 個検出されました。`;
+                            detectedFacesContainer.innerHTML = '';
+                            detections.forEach((detection) => {
+                                const { x, y, width, height } = detection.detection.box;
+
+                                const faceCanvas = document.createElement('canvas');
+                                faceCanvas.width = 32;
+                                faceCanvas.height = 32;
+                                const ctx = faceCanvas.getContext('2d');
+                                ctx.drawImage(image, x, y, width, height, 0, 0, 32, 32);
+
+                                const faceImage = new Image();
+                                faceImage.src = faceCanvas.toDataURL();
+                                faceImage.classList.add('faceImage');
+
+                                const emojiSelect = document.createElement('select');
+                                emojiSelect.classList.add('emojiSelect');
+                                const emojis = ['😀', '😂', '😍', '😎', '😢'];
+                                emojis.forEach(emoji => {
+                                    const option = document.createElement('option');
+                                    option.value = emoji;
+                                    option.textContent = emoji;
+                                    emojiSelect.appendChild(option);
+                                });
+
+                                const emojiSizeInput = document.createElement('input');
+                                emojiSizeInput.type = 'number';
+                                emojiSizeInput.classList.add('emojiSizeInput');
+                                emojiSizeInput.value = Math.min(width, height);
+                                emojiSizeInput.min = 1;
+                                emojiSizeInput.max = 200;
+
+                                const offsetXInput = document.createElement('input');
+                                offsetXInput.type = 'number';
+                                offsetXInput.classList.add('offsetXInput');
+                                offsetXInput.value = 0;
+                                offsetXInput.min = -100;
+                                offsetXInput.max = 100;
+
+                                const offsetSizeBigButton = document.createElement('button');
+                                offsetSizeBigButton.textContent = '+';
+                                offsetSizeBigButton.classList.add('offsetButton');
+                                offsetSizeBigButton.addEventListener('click', () => {
+                                    emojiSizeInput.value = parseInt(emojiSizeInput.value) + 1;
+                                    updateResult();
+                                });
+
+                                const offsetSizeSmallButton = document.createElement('button');
+                                offsetSizeSmallButton.textContent = '-';
+                                offsetSizeSmallButton.classList.add('offsetButton');
+                                offsetSizeSmallButton.addEventListener('click', () => {
+                                    emojiSizeInput.value = parseInt(emojiSizeInput.value) - 1;
+                                    updateResult();
+                                });
+
+                                const offsetXPlusButton = document.createElement('button');
+                                offsetXPlusButton.textContent = '→';
+                                offsetXPlusButton.classList.add('offsetButton');
+                                offsetXPlusButton.addEventListener('click', () => {
+                                    offsetXInput.value = parseInt(offsetXInput.value) + 1;
+                                    updateResult();
+                                });
+
+                                const offsetXMinusButton = document.createElement('button');
+                                offsetXMinusButton.textContent = '←';
+                                offsetXMinusButton.classList.add('offsetButton');
+                                offsetXMinusButton.addEventListener('click', () => {
+                                    offsetXInput.value = parseInt(offsetXInput.value) - 1;
+                                    updateResult();
+                                });
+
+                                const offsetYInput = document.createElement('input');
+                                offsetYInput.type = 'number';
+                                offsetYInput.classList.add('offsetYInput');
+                                offsetYInput.value = 0;
+                                offsetYInput.min = -100;
+                                offsetYInput.max = 100;
+
+                                const offsetYPlusButton = document.createElement('button');
+                                offsetYPlusButton.textContent = '↑';
+                                offsetYPlusButton.classList.add('offsetButton');
+                                offsetYPlusButton.addEventListener('click', () => {
+                                    offsetYInput.value = parseInt(offsetYInput.value) - 1;
+                                    updateResult();
+                                });
+
+                                const offsetYMinusButton = document.createElement('button');
+                                offsetYMinusButton.textContent = '↓';
+                                offsetYMinusButton.classList.add('offsetButton');
+                                offsetYMinusButton.addEventListener('click', () => {
+                                    offsetYInput.value = parseInt(offsetYInput.value) + 1;
+                                    updateResult();
+                                }); 
+
+                                const faceItem = document.createElement('div');
+                                faceItem.classList.add('faceItem');
+                                faceItem.appendChild(faceImage);
+                                faceItem.appendChild(emojiSelect);
+                                faceItem.appendChild(offsetSizeSmallButton);
+                                faceItem.appendChild(emojiSizeInput);                                
+                                faceItem.appendChild(offsetSizeBigButton);
+                                faceItem.appendChild(offsetXMinusButton);
+                                faceItem.appendChild(offsetXInput);
+                                faceItem.appendChild(offsetXPlusButton);
+                                faceItem.appendChild(offsetYPlusButton);
+                                faceItem.appendChild(offsetYInput);
+                                faceItem.appendChild(offsetYMinusButton);
+                                detectedFacesContainer.appendChild(faceItem);
+
+                                emojiSelect.addEventListener('change', updateResult);
+                                emojiSizeInput.addEventListener('input', updateResult);
+                                offsetXInput.addEventListener('input', updateResult);
+                                offsetYInput.addEventListener('input', updateResult);
+                            });
+
+                            updateResult();
+                        } else {
+                            status.textContent = '顔が検出されませんでした。';
+                            detectedFacesContainer.innerHTML = '';
+                        }
+                    };
+                };
+
+                reader.readAsDataURL(file);
+            });
+
+            function updateResult() {
+                const resultCanvas = document.createElement('canvas');
+                resultCanvas.width = originalImageWidth;
+                resultCanvas.height = originalImageHeight;
+                const ctx = resultCanvas.getContext('2d');
+
+                // ファイルから読み込んだ画像を再描画
+                if (originalImage) {
+                    ctx.clearRect(0, 0, resultCanvas.width, resultCanvas.height);  // キャンバスをリセット
+                    ctx.drawImage(originalImage, 0, 0);  // 元の画像を再描画
+
+                    // 絵文字を描画
+                    const faceItems = document.querySelectorAll('.faceItem');
+                    faceItems.forEach((faceItem, index) => {
+                        const emojiSelect = faceItem.querySelector('.emojiSelect');
+                        const selectedEmoji = emojiSelect.value;
+                        const emojiSizeInput = faceItem.querySelector('.emojiSizeInput');
+                        const emojiSize = parseInt(emojiSizeInput.value) || 32;
+                        const offsetXInput = faceItem.querySelector('.offsetXInput');
+                        const offsetYInput = faceItem.querySelector('.offsetYInput');
+                        const offsetX = parseInt(offsetXInput.value) || 0;
+                        const offsetY = parseInt(offsetYInput.value) || 0;
+
+                        const { x, y } = detections[index].detection.box;
+
+                        ctx.font = `${emojiSize}px Arial`;
+                        ctx.textBaseline = 'top';
+                        ctx.fillText(selectedEmoji, x + offsetX, y + offsetY);
+                    });
+
+                    resultImage.src = resultCanvas.toDataURL();
+                    resultImage.style.display = 'block';
+                    resultImage.style.width = `${originalImageWidth}px`;
+                }
+            }
+        }
+
+        start();
+    </script>
+</body>
+</html>
