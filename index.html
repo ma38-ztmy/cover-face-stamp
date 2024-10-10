@@ -73,7 +73,7 @@
     <div id="detectedFaces"></div>
     <img id="resultImage" style="display:none;">
 
-    <script src="./face-api.js"></script>
+    <script src="face-api.js"></script>
 
     <script>
         let detections = [];
@@ -82,10 +82,10 @@
         let originalImage = null;  // 読み込んだ画像を保持するための変数
 
         async function start() {
-            await faceapi.nets.ssdMobilenetv1.loadFromUri('./weights');
-            await faceapi.nets.faceLandmark68Net.loadFromUri('./weights');
-            await faceapi.nets.faceRecognitionNet.loadFromUri('./weights');
-            await faceapi.nets.tinyFaceDetector.loadFromUri('./weights');
+            await faceapi.nets.ssdMobilenetv1.loadFromUri('weights');
+            await faceapi.nets.faceLandmark68Net.loadFromUri('weights');
+            await faceapi.nets.faceRecognitionNet.loadFromUri('weights');
+            await faceapi.nets.tinyFaceDetector.loadFromUri('weights');
 
             const imageUpload = document.getElementById('imageUpload');
             const overlay = document.getElementById('overlay');
