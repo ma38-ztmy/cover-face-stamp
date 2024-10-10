@@ -72,7 +72,6 @@
     <div id="status">画像を選択してください。</div>
     <div id="detectedFaces"></div>
     <img id="resultImage" style="display:none;">
-    <button id="downloadButton" style="display:none;">画像をダウンロード</button>
 
     <script src="face-api.js"></script>
 
@@ -93,7 +92,6 @@
             const status = document.getElementById('status');
             const detectedFacesContainer = document.getElementById('detectedFaces');
             const resultImage = document.getElementById('resultImage');
-            const downloadButton = document.getElementById('downloadButton');            
 
             imageUpload.addEventListener('change', async () => {
                 const file = imageUpload.files[0];
@@ -282,15 +280,6 @@
                     resultImage.src = resultCanvas.toDataURL();
                     resultImage.style.display = 'block';
                     resultImage.style.width = `${originalImageWidth}px`;
-                    downloadButton.style.display = 'block';
-
-                    downloadButton.addEventListener('click', () => {
-                        const link = document.createElement('a');
-                        link.href = resultImage.src;
-                        link.download = 'result.png';
-                        link.click();
-                    });
-
                 }
             }
         }
